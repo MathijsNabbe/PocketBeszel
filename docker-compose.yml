@@ -1,0 +1,31 @@
+services:
+  beszel-dashboard:
+    build: .
+    container_name: beszel-dashboard
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    restart: unless-stopped
+    # Uncomment if Beszel runs on the same Docker network:
+    # networks:
+    #   - beszel
+
+  # Example Beszel hub (uncomment to run alongside the dashboard):
+  # beszel:
+  #   image: ghcr.io/henrygd/beszel/beszel:latest
+  #   container_name: beszel
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8090:8090"
+  #   volumes:
+  #     - beszel_data:/beszel_data
+  #   networks:
+  #     - beszel
+
+# networks:
+#   beszel:
+#     name: beszel
+
+# volumes:
+#   beszel_data:
