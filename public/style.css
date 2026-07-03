@@ -9,6 +9,9 @@
   --accent-cpu-glow: rgba(34, 211, 238, 0.45);
   --accent-ram: #a78bfa;
   --accent-ram-glow: rgba(167, 139, 250, 0.45);
+  --accent-temp: #fb923c;
+  --accent-network: #4ade80;
+  --accent-containers: #f472b6;
   --warning: #fbbf24;
   --warning-glow: rgba(251, 191, 36, 0.4);
   --critical: #f87171;
@@ -19,7 +22,8 @@
   --spacing: clamp(6px, 1.6vw, 14px);
   --font-title: clamp(0.9rem, 3.8vw, 1.4rem);
   --font-device: clamp(0.7rem, 2.8vw, 1rem);
-  --font-metric: clamp(0.65rem, 2.4vw, 0.9rem);
+  --font-metric: clamp(0.6rem, 2.2vw, 0.85rem);
+  --font-stat: clamp(0.55rem, 2vw, 0.8rem);
   --font-state: clamp(0.95rem, 4vw, 1.5rem);
 }
 
@@ -178,8 +182,80 @@ body::before {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: calc(var(--spacing) * 0.6);
+  gap: calc(var(--spacing) * 0.45);
   min-height: 0;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(var(--spacing) * 0.35);
+  margin-top: calc(var(--spacing) * 0.15);
+}
+
+.stat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: calc(var(--spacing) * 0.35) calc(var(--spacing) * 0.25);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  min-width: 0;
+}
+
+.stat-pill__label {
+  font-size: var(--font-stat);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stat-pill__value {
+  font-size: var(--font-stat);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.metric--temp .stat-pill__label,
+.metric--temp .stat-pill__value {
+  color: var(--accent-temp);
+}
+
+.metric--network .stat-pill__label,
+.metric--network .stat-pill__value {
+  color: var(--accent-network);
+}
+
+.metric--containers .stat-pill__label,
+.metric--containers .stat-pill__value {
+  color: var(--accent-containers);
+}
+
+.stat-pill--warning {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.stat-pill--warning .stat-pill__label,
+.stat-pill--warning .stat-pill__value {
+  color: var(--warning);
+}
+
+.stat-pill--critical {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.1);
+  animation: pulse-critical 1.5s ease-in-out infinite;
+}
+
+.stat-pill--critical .stat-pill__label,
+.stat-pill--critical .stat-pill__value {
+  color: var(--critical);
 }
 
 .metric-row__header {
@@ -212,7 +288,7 @@ body::before {
 
 .progress-bar {
   width: 100%;
-  height: clamp(6px, 2vh, 12px);
+  height: clamp(5px, 1.6vh, 10px);
   background: var(--bar-track);
   border-radius: 999px;
   overflow: hidden;

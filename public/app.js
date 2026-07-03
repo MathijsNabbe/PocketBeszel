@@ -1,8 +1,29 @@
 const REFRESH_INTERVAL = 60000;
 
-const METRICS = [
+const BAR_METRICS = [
   { key: "cpu", label: "CPU", className: "metric--cpu" },
   { key: "ram", label: "RAM", className: "metric--ram" },
+];
+
+const STAT_METRICS = [
+  {
+    key: "temperature",
+    label: "TEMP",
+    className: "metric--temp",
+    format: (v) => (v > 0 ? `${v}°C` : "—"),
+  },
+  {
+    key: "network",
+    label: "NET",
+    className: "metric--network",
+    format: (v) => (v > 0 ? `${v} MB/s` : "—"),
+  },
+  {
+    key: "containers",
+    label: "DOCKER",
+    className: "metric--containers",
+    format: (v) => String(v),
+  },
 ];
 
 const state = {
@@ -16,6 +37,12 @@ const app = document.getElementById("app");
 function getUsageLevel(value) {
   if (value >= 85) return "critical";
   if (value >= 60) return "warning";
+  return "normal";
+}
+
+function getTempLevel(value) {
+  if (value >= 85) return "critical";
+  if (value >= 70) return "warning";
   return "normal";
 }
 
@@ -70,6 +97,36 @@ function updateMetricRow(row, metric, device) {
   }
 }
 
+function createStatPill(metric, device) {
+  const value = device[metric.key] ?? 0;
+  const level = metric.key === "temperature" ? getTempLevel(value) : "normal";
+
+  const pill = document.createElement("div");
+  pill.className = `stat-pill ${metric.className} stat-pill--${level}`;
+  pill.dataset.metric = metric.key;
+
+  const label = document.createElement("span");
+  label.className = "stat-pill__label";
+  label.textContent = metric.label;
+
+  const valueEl = document.createElement("span");
+  valueEl.className = "stat-pill__value";
+  valueEl.textContent = metric.format(value);
+
+  pill.append(label, valueEl);
+  return pill;
+}
+
+function updateStatPill(pill, metric, device) {
+  const value = device[metric.key] ?? 0;
+  const level = metric.key === "temperature" ? getTempLevel(value) : "normal";
+
+  pill.className = `stat-pill ${metric.className} stat-pill--${level}`;
+
+  const valueEl = pill.querySelector(".stat-pill__value");
+  if (valueEl) valueEl.textContent = metric.format(value);
+}
+
 function createDeviceCard(device) {
   const card = document.createElement("article");
   card.className = "device-card";
@@ -82,10 +139,18 @@ function createDeviceCard(device) {
   const metrics = document.createElement("div");
   metrics.className = "device-card__metrics";
 
-  for (const metric of METRICS) {
+  for (const metric of BAR_METRICS) {
     metrics.appendChild(createMetricRow(metric, device));
   }
 
+  const statRow = document.createElement("div");
+  statRow.className = "stat-row";
+
+  for (const metric of STAT_METRICS) {
+    statRow.appendChild(createStatPill(metric, device));
+  }
+
+  metrics.appendChild(statRow);
   card.append(name, metrics);
   return card;
 }
@@ -94,9 +159,14 @@ function updateDeviceCard(card, device) {
   const nameEl = card.querySelector(".device-card__name");
   if (nameEl) nameEl.textContent = device.name;
 
-  for (const metric of METRICS) {
+  for (const metric of BAR_METRICS) {
     const row = card.querySelector(`[data-metric="${metric.key}"]`);
     if (row) updateMetricRow(row, metric, device);
+  }
+
+  for (const metric of STAT_METRICS) {
+    const pill = card.querySelector(`.stat-pill[data-metric="${metric.key}"]`);
+    if (pill) updateStatPill(pill, metric, device);
   }
 }
 

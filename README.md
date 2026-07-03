@@ -9,7 +9,7 @@ Beszel Dashboard is a lightweight appliance-style web app that:
 - Proxies Beszel's PocketBase API so credentials never reach the browser
 - Caches device metrics and refreshes every 60 seconds
 - Reloads the page every 60 seconds for reliable kiosk updates
-- Shows CPU and RAM usage for all devices on a single screen
+- Shows CPU, RAM, temperature, network throughput, and running Docker container count per device
 - Modern card grid layout optimized for small landscape displays
 
 ## Installation
@@ -107,7 +107,7 @@ docker compose up -d --force-recreate
 
 The backend exposes two endpoints:
 
-- `GET /api/devices` — Returns an array of `{ id, name, cpu, ram }` objects
+- `GET /api/devices` — Returns an array of `{ id, name, cpu, ram, temperature, network, containers }` objects
 - `GET /api/health` — Returns `{ status, beszel, deviceCount, lastUpdated }`
 
 ## Kiosk mode (Raspberry Pi / Orange Pi)

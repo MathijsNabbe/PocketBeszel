@@ -25,13 +25,46 @@ function roundMetric(value) {
   return Math.round(Math.min(100, Math.max(0, value)));
 }
 
-export function normalizeDevice(record) {
+function roundDecimal(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return 0;
+  }
+  return Math.round(value * 10) / 10;
+}
+
+function isRunningContainer(status) {
+  if (typeof status !== "string") {
+    return false;
+  }
+  const normalized = status.toLowerCase();
+  return normalized.startsWith("up") || normalized === "running";
+}
+
+function countContainersBySystem(items) {
+  const counts = {};
+  for (const record of items) {
+    if (!isRunningContainer(record.status)) {
+      continue;
+    }
+    const systemId = record.system;
+    if (!systemId) {
+      continue;
+    }
+    counts[systemId] = (counts[systemId] ?? 0) + 1;
+  }
+  return counts;
+}
+
+export function normalizeDevice(record, containerCounts) {
   const info = record.info ?? {};
   return {
     id: record.id,
     name: record.name ?? "Unknown",
     cpu: roundMetric(info.cpu),
     ram: roundMetric(info.mp),
+    temperature: roundDecimal(info.dt),
+    network: roundDecimal(info.b),
+    containers: containerCounts[record.id] ?? 0,
   };
 }
 
@@ -83,42 +116,59 @@ async function ensureToken(forceRefresh = false) {
   return activeToken;
 }
 
-async function fetchSystems(token) {
-  const url = new URL(`${config.beszelUrl}/api/collections/systems/records`);
-  url.searchParams.set("page", "1");
-  url.searchParams.set("perPage", "500");
+async function beszelFetch(path, token, params = {}) {
+  const url = new URL(`${config.beszelUrl}${path}`);
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
 
-  const response = await fetch(url, {
+  return fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
     signal: AbortSignal.timeout(config.requestTimeout),
   });
+}
 
-  return response;
+async function fetchWithAuth(path, params = {}) {
+  let token = await ensureToken();
+  if (!token) {
+    return null;
+  }
+
+  let response = await beszelFetch(path, token, params);
+
+  if (response.status === 401) {
+    token = await ensureToken(true);
+    if (!token) {
+      return null;
+    }
+    response = await beszelFetch(path, token, params);
+  }
+
+  if (!response.ok) {
+    return null;
+  }
+
+  return response.json();
 }
 
 export async function fetchDevices() {
   try {
-    let token = await ensureToken();
-    if (!token) {
-      setCache([], "offline");
-      return { ok: false, devices: [], beszelStatus: "offline" };
-    }
+    const [systemsData, containersData] = await Promise.all([
+      fetchWithAuth("/api/collections/systems/records", {
+        page: "1",
+        perPage: "500",
+      }),
+      fetchWithAuth("/api/collections/containers/records", {
+        page: "1",
+        perPage: "2000",
+        fields: "id,system,status",
+      }),
+    ]);
 
-    let response = await fetchSystems(token);
-
-    if (response.status === 401) {
-      token = await ensureToken(true);
-      if (!token) {
-        setCache([], "offline");
-        return { ok: false, devices: [], beszelStatus: "offline" };
-      }
-      response = await fetchSystems(token);
-    }
-
-    if (!response.ok) {
-      console.error(`Beszel API error: ${response.status} ${response.statusText}`);
+    if (!systemsData) {
+      console.error("Beszel API error: failed to fetch systems");
       cache.beszelStatus = "offline";
       return {
         ok: false,
@@ -127,9 +177,9 @@ export async function fetchDevices() {
       };
     }
 
-    const data = await response.json();
-    const items = data.items ?? [];
-    const devices = items.map(normalizeDevice);
+    const items = systemsData.items ?? [];
+    const containerCounts = countContainersBySystem(containersData?.items ?? []);
+    const devices = items.map((record) => normalizeDevice(record, containerCounts));
 
     setCache(devices, "ok");
     return { ok: true, devices, beszelStatus: "ok" };
