@@ -214,3 +214,11 @@ async function fetchDevices() {
 
 fetchDevices();
 setInterval(fetchDevices, REFRESH_INTERVAL);
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) fetchDevices();
+});
+
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) fetchDevices();
+});

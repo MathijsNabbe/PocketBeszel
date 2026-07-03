@@ -8,6 +8,7 @@ Beszel Dashboard is a lightweight appliance-style web app that:
 
 - Proxies Beszel's PocketBase API so credentials never reach the browser
 - Caches device metrics and refreshes every 10 seconds
+- Reloads the page every 10 seconds for reliable kiosk updates
 - Shows CPU and RAM usage for all devices on a single screen
 - Modern card grid layout optimized for small landscape displays
 
@@ -116,6 +117,8 @@ Launch Chromium in kiosk mode on your display:
 ```bash
 chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:3000
 ```
+
+The page automatically reloads every 10 seconds via a meta refresh tag, which keeps kiosk displays up to date even when JavaScript timers are throttled.
 
 For a 480×320 display, set the framebuffer resolution in `/boot/config.txt` or your display driver configuration.
 
