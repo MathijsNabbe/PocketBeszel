@@ -8,8 +8,8 @@ Beszel Dashboard is a lightweight appliance-style web app that:
 
 - Proxies Beszel's PocketBase API so credentials never reach the browser
 - Caches device metrics and refreshes every 30 seconds
-- Shows CPU and RAM usage per device with touch-friendly navigation
-- Displays an overview page when multiple devices are monitored
+- Shows CPU and RAM usage for all devices on a single screen
+- Modern card grid layout optimized for small landscape displays
 
 ## Installation
 

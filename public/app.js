@@ -1,254 +1,177 @@
 const REFRESH_INTERVAL = 30000;
 
 const METRICS = [
-  { key: "cpu", label: "CPU", format: (v) => `${v}%` },
-  { key: "ram", label: "RAM", format: (v) => `${v}%` },
+  { key: "cpu", label: "CPU", className: "metric--cpu" },
+  { key: "ram", label: "RAM", className: "metric--ram" },
 ];
 
 const state = {
   devices: [],
-  currentPageIndex: 0,
   viewMode: "loading",
   errorMessage: null,
-  hasMultiplePages: false,
 };
 
 const app = document.getElementById("app");
 
-function buildPages() {
-  if (state.devices.length === 0) {
-    return [];
-  }
-  if (state.devices.length === 1) {
-    return [{ type: "device", device: state.devices[0] }];
-  }
-  return [
-    { type: "overview" },
-    ...state.devices.map((device) => ({ type: "device", device })),
-  ];
+function getUsageLevel(value) {
+  if (value >= 85) return "critical";
+  if (value >= 60) return "warning";
+  return "normal";
 }
 
-function createProgressBar(value) {
-  const bar = document.createElement("div");
-  bar.className = "progress-bar";
-  const fill = document.createElement("div");
-  fill.className = "progress-fill";
-  fill.style.width = `${value}%`;
-  fill.dataset.value = String(value);
-  bar.appendChild(fill);
-  return { bar, fill };
-}
-
-function renderMetric(metric, device, existingEl) {
+function createMetricRow(metric, device) {
   const value = device[metric.key] ?? 0;
+  const level = getUsageLevel(value);
 
-  if (existingEl) {
-    const valueEl = existingEl.querySelector(".metric-value");
-    const fillEl = existingEl.querySelector(".progress-fill");
-    if (valueEl && valueEl.textContent !== metric.format(value)) {
-      valueEl.textContent = metric.format(value);
-    }
-    if (fillEl && fillEl.dataset.value !== String(value)) {
-      fillEl.style.width = `${value}%`;
-      fillEl.dataset.value = String(value);
-    }
-    return existingEl;
-  }
+  const row = document.createElement("div");
+  row.className = `metric-row ${metric.className}`;
+  row.dataset.metric = metric.key;
 
-  const metricEl = document.createElement("div");
-  metricEl.className = "metric";
-  metricEl.dataset.metric = metric.key;
+  const header = document.createElement("div");
+  header.className = "metric-row__header";
 
-  const label = document.createElement("div");
-  label.className = "metric-label";
+  const label = document.createElement("span");
+  label.className = "metric-row__label";
   label.textContent = metric.label;
 
-  const valueEl = document.createElement("div");
-  valueEl.className = "metric-value";
-  valueEl.textContent = metric.format(value);
+  const valueEl = document.createElement("span");
+  valueEl.className = "metric-row__value";
+  valueEl.textContent = `${value}%`;
 
-  const { bar } = createProgressBar(value);
+  header.append(label, valueEl);
 
-  metricEl.append(label, valueEl, bar);
-  return metricEl;
+  const bar = document.createElement("div");
+  bar.className = "progress-bar";
+
+  const fill = document.createElement("div");
+  fill.className = `progress-fill progress-fill--${level}`;
+  fill.style.width = `${value}%`;
+  fill.dataset.value = String(value);
+
+  bar.appendChild(fill);
+  row.append(header, bar);
+  return row;
 }
 
-function renderOverviewPage(card, existingCard) {
-  if (existingCard) {
-    const list = existingCard.querySelector(".overview-list");
-    const items = list?.querySelectorAll(".overview-item") ?? [];
+function updateMetricRow(row, metric, device) {
+  const value = device[metric.key] ?? 0;
+  const level = getUsageLevel(value);
 
-    state.devices.forEach((device, index) => {
-      const item = items[index];
-      if (!item) return;
+  const valueEl = row.querySelector(".metric-row__value");
+  if (valueEl) valueEl.textContent = `${value}%`;
 
-      const cpuEl = item.querySelector('[data-stat="cpu"]');
-      const ramEl = item.querySelector('[data-stat="ram"]');
-      if (cpuEl) cpuEl.textContent = `${device.cpu}%`;
-      if (ramEl) ramEl.textContent = `${device.ram}%`;
-    });
-
-    return existingCard;
-  }
-
-  card.innerHTML = "";
-
-  const title = document.createElement("h1");
-  title.className = "card-title";
-  title.textContent = "Overview";
-
-  const list = document.createElement("div");
-  list.className = "overview-list";
-
-  for (const device of state.devices) {
-    const item = document.createElement("div");
-    item.className = "overview-item";
-
-    const name = document.createElement("span");
-    name.className = "overview-name";
-    name.textContent = device.name;
-
-    const stats = document.createElement("div");
-    stats.className = "overview-stats";
-
-    const cpuStat = document.createElement("span");
-    cpuStat.className = "overview-stat";
-    cpuStat.dataset.stat = "cpu";
-    cpuStat.textContent = `${device.cpu}%`;
-
-    const ramStat = document.createElement("span");
-    ramStat.className = "overview-stat";
-    ramStat.dataset.stat = "ram";
-    ramStat.textContent = `${device.ram}%`;
-
-    stats.append(cpuStat, ramStat);
-    item.append(name, stats);
-    list.appendChild(item);
-  }
-
-  card.append(title, list);
-  return card;
-}
-
-function renderDevicePage(card, device, existingCard) {
-  if (existingCard) {
-    const nameEl = existingCard.querySelector(".device-name");
-    if (nameEl) nameEl.textContent = device.name;
-
-    const metricsEl = existingCard.querySelector(".metrics");
-    if (metricsEl) {
-      METRICS.forEach((metric) => {
-        const existing = metricsEl.querySelector(`[data-metric="${metric.key}"]`);
-        renderMetric(metric, device, existing);
-      });
+  const fill = row.querySelector(".progress-fill");
+  if (fill) {
+    fill.className = `progress-fill progress-fill--${level}`;
+    if (fill.dataset.value !== String(value)) {
+      fill.style.width = `${value}%`;
+      fill.dataset.value = String(value);
     }
-
-    return existingCard;
   }
+}
 
-  card.innerHTML = "";
+function createDeviceCard(device) {
+  const card = document.createElement("article");
+  card.className = "device-card";
+  card.dataset.id = device.id;
 
-  const name = document.createElement("h1");
-  name.className = "device-name";
+  const name = document.createElement("h2");
+  name.className = "device-card__name";
   name.textContent = device.name;
 
-  const metricsEl = document.createElement("div");
-  metricsEl.className = "metrics";
+  const metrics = document.createElement("div");
+  metrics.className = "device-card__metrics";
 
   for (const metric of METRICS) {
-    metricsEl.appendChild(renderMetric(metric, device));
+    metrics.appendChild(createMetricRow(metric, device));
   }
 
-  card.append(name, metricsEl);
+  card.append(name, metrics);
   return card;
+}
+
+function updateDeviceCard(card, device) {
+  const nameEl = card.querySelector(".device-card__name");
+  if (nameEl) nameEl.textContent = device.name;
+
+  for (const metric of METRICS) {
+    const row = card.querySelector(`[data-metric="${metric.key}"]`);
+    if (row) updateMetricRow(row, metric, device);
+  }
 }
 
 function renderStatePage(message) {
   app.innerHTML = "";
 
-  const card = document.createElement("div");
-  card.className = "card";
+  const shell = document.createElement("div");
+  shell.className = "dashboard dashboard--state";
 
   const msg = document.createElement("div");
   msg.className = "state-message";
   msg.textContent = message;
 
-  card.appendChild(msg);
-  app.appendChild(card);
+  shell.appendChild(msg);
+  app.appendChild(shell);
 }
 
-function renderNavigation() {
-  const existingPrev = app.querySelector(".nav-btn--prev");
-  const existingNext = app.querySelector(".nav-btn--next");
-
-  if (!state.hasMultiplePages) {
-    existingPrev?.remove();
-    existingNext?.remove();
-    return;
-  }
-
-  let prevBtn = existingPrev;
-  let nextBtn = existingNext;
-
-  if (!prevBtn) {
-    prevBtn = document.createElement("button");
-    prevBtn.className = "nav-btn nav-btn--prev";
-    prevBtn.setAttribute("aria-label", "Previous page");
-    prevBtn.textContent = "◀";
-    prevBtn.addEventListener("click", () => navigate(-1));
-    app.appendChild(prevBtn);
-  }
-
-  if (!nextBtn) {
-    nextBtn = document.createElement("button");
-    nextBtn.className = "nav-btn nav-btn--next";
-    nextBtn.setAttribute("aria-label", "Next page");
-    nextBtn.textContent = "▶";
-    nextBtn.addEventListener("click", () => navigate(1));
-    app.appendChild(nextBtn);
-  }
-}
-
-function renderCurrentPage(isUpdate = false) {
-  const pages = buildPages();
-
-  if (pages.length === 0) {
+function renderDashboard(isUpdate = false) {
+  if (state.devices.length === 0) {
     renderStatePage(state.errorMessage ?? "No devices found");
     return;
   }
 
-  if (state.currentPageIndex >= pages.length) {
-    state.currentPageIndex = 0;
-  }
+  let shell = app.querySelector(".dashboard");
+  let grid = app.querySelector(".device-grid");
 
-  state.hasMultiplePages = pages.length > 1;
-  const page = pages[state.currentPageIndex];
-
-  let card = app.querySelector(".card");
-
-  if (!isUpdate || !card) {
+  if (!isUpdate || !shell) {
     app.innerHTML = "";
-    card = document.createElement("div");
-    card.className = "card";
-    app.appendChild(card);
+
+    shell = document.createElement("div");
+    shell.className = "dashboard";
+
+    const header = document.createElement("header");
+    header.className = "dashboard-header";
+
+    const title = document.createElement("h1");
+    title.className = "dashboard-header__title";
+    title.textContent = "Beszel";
+
+    const count = document.createElement("span");
+    count.className = "dashboard-header__count";
+    count.textContent = `${state.devices.length} server${state.devices.length === 1 ? "" : "s"}`;
+
+    header.append(title, count);
+
+    grid = document.createElement("div");
+    grid.className = "device-grid";
+
+    shell.append(header, grid);
+    app.appendChild(shell);
   }
 
-  if (page.type === "overview") {
-    renderOverviewPage(card, isUpdate ? card : null);
-  } else {
-    renderDevicePage(card, page.device, isUpdate ? card : null);
+  grid.dataset.count = String(Math.min(state.devices.length, 6));
+
+  const countEl = shell.querySelector(".dashboard-header__count");
+  if (countEl) {
+    countEl.textContent = `${state.devices.length} server${state.devices.length === 1 ? "" : "s"}`;
   }
 
-  renderNavigation();
-}
+  const existingCards = [...grid.querySelectorAll(".device-card")];
+  const existingById = new Map(existingCards.map((card) => [card.dataset.id, card]));
 
-function navigate(direction) {
-  const pages = buildPages();
-  if (pages.length <= 1) return;
+  for (const device of state.devices) {
+    const existing = existingById.get(device.id);
+    if (existing) {
+      updateDeviceCard(existing, device);
+      existingById.delete(device.id);
+    } else {
+      grid.appendChild(createDeviceCard(device));
+    }
+  }
 
-  state.currentPageIndex =
-    (state.currentPageIndex + direction + pages.length) % pages.length;
-  renderCurrentPage(false);
+  for (const stale of existingById.values()) {
+    stale.remove();
+  }
 }
 
 async function fetchDevices() {
@@ -280,7 +203,7 @@ async function fetchDevices() {
     state.viewMode = "dashboard";
     state.errorMessage = null;
     state.devices = devices;
-    renderCurrentPage(isUpdate);
+    renderDashboard(isUpdate);
   } catch {
     state.viewMode = "error";
     state.errorMessage = "Backend Offline";
