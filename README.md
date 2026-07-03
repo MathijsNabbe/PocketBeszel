@@ -20,15 +20,21 @@ Beszel Dashboard is a lightweight appliance-style web app that:
    cd PocketBeszel
    ```
 
-2. Copy the example environment file:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Edit `.env` with your Beszel connection details (see Configuration below).
+2. Edit `docker-compose.yml` and set your Beszel connection details (see Configuration below).
 
 ## Configuration
+
+All settings are configured in `docker-compose.yml` under the `environment` section of the `beszel-dashboard` service:
+
+```yaml
+environment:
+  PORT: "3000"
+  BESZEL_URL: "http://beszel:8090"
+  BESZEL_API_KEY: ""
+  BESZEL_EMAIL: ""
+  BESZEL_PASSWORD: ""
+  REFRESH_INTERVAL: "30000"
+```
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -52,11 +58,11 @@ curl -s -X POST "$BESZEL_URL/api/collections/users/auth-with-password" \
   | jq -r '.token'
 ```
 
-Paste the result into `BESZEL_API_KEY` in your `.env` file.
+Paste the result into `BESZEL_API_KEY` in `docker-compose.yml`.
 
 ### Automatic token refresh
 
-PocketBase JWT tokens expire. To avoid manual re-authentication, set `BESZEL_EMAIL` and `BESZEL_PASSWORD`. The backend will automatically obtain a new token when the current one expires.
+PocketBase JWT tokens expire. To avoid manual re-authentication, set `BESZEL_EMAIL` and `BESZEL_PASSWORD` in `docker-compose.yml`. The backend will automatically obtain a new token when the current one expires.
 
 ## Running
 
@@ -79,13 +85,21 @@ networks:
     name: beszel
 ```
 
-Then uncomment the `networks` section in this project's `docker-compose.yml` and set `BESZEL_URL=http://beszel:8090`.
+Then uncomment the `networks` section in this project's `docker-compose.yml` and set `BESZEL_URL` to `http://beszel:8090`.
 
 ## Updating
+
+After pulling changes, rebuild and restart:
 
 ```bash
 git pull
 docker compose up -d --build
+```
+
+If you changed environment variables in `docker-compose.yml`, recreate the container:
+
+```bash
+docker compose up -d --force-recreate
 ```
 
 ## API
@@ -120,7 +134,7 @@ docker compose logs beszel-dashboard
 
 The dashboard is running but cannot reach Beszel. Verify:
 
-- `BESZEL_URL` is correct (use the Docker service name, not `localhost`, when both run in Docker)
+- `BESZEL_URL` in `docker-compose.yml` is correct (use the Docker service name, not `localhost`, when both run in Docker)
 - Both containers are on the same Docker network
 - `BESZEL_API_KEY` is valid, or `BESZEL_EMAIL`/`BESZEL_PASSWORD` are set for auto-refresh
 - Beszel is running: `curl http://beszel:8090/api/health`
@@ -131,7 +145,7 @@ Beszel is reachable but no systems are registered. Add agents via the Beszel web
 
 ### Expired JWT token
 
-If using only `BESZEL_API_KEY`, regenerate the token with the curl command above. Alternatively, set `BESZEL_EMAIL` and `BESZEL_PASSWORD` for automatic refresh.
+If using only `BESZEL_API_KEY`, regenerate the token with the curl command above and update `docker-compose.yml`. Alternatively, set `BESZEL_EMAIL` and `BESZEL_PASSWORD` for automatic refresh.
 
 ## License
 
