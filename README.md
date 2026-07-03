@@ -7,8 +7,8 @@ A fullscreen touchscreen dashboard for monitoring servers via [Beszel](https://b
 Beszel Dashboard is a lightweight appliance-style web app that:
 
 - Proxies Beszel's PocketBase API so credentials never reach the browser
-- Caches device metrics and refreshes every 10 seconds
-- Reloads the page every 10 seconds for reliable kiosk updates
+- Caches device metrics and refreshes every 60 seconds
+- Reloads the page every 60 seconds for reliable kiosk updates
 - Shows CPU and RAM usage for all devices on a single screen
 - Modern card grid layout optimized for small landscape displays
 
@@ -34,7 +34,7 @@ environment:
   BESZEL_API_KEY: ""
   BESZEL_EMAIL: ""
   BESZEL_PASSWORD: ""
-  REFRESH_INTERVAL: "10000"
+  REFRESH_INTERVAL: "60000"
 ```
 
 | Variable | Required | Default | Description |
@@ -44,7 +44,7 @@ environment:
 | `BESZEL_API_KEY` | Yes* | — | PocketBase JWT bearer token |
 | `BESZEL_EMAIL` | No | — | Beszel user email (for automatic token refresh) |
 | `BESZEL_PASSWORD` | No | — | Beszel user password (for automatic token refresh) |
-| `REFRESH_INTERVAL` | No | `10000` | Cache refresh interval in milliseconds |
+| `REFRESH_INTERVAL` | No | `60000` | Cache refresh interval in milliseconds (1 minute) |
 
 \* Either `BESZEL_API_KEY` or both `BESZEL_EMAIL` and `BESZEL_PASSWORD` must be set.
 
@@ -118,7 +118,7 @@ Launch Chromium in kiosk mode on your display:
 chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:3000
 ```
 
-The page automatically reloads every 10 seconds via a meta refresh tag, which keeps kiosk displays up to date even when JavaScript timers are throttled.
+The page automatically reloads every 60 seconds via a meta refresh tag, which keeps kiosk displays up to date even when JavaScript timers are throttled.
 
 For a 480×320 display, set the framebuffer resolution in `/boot/config.txt` or your display driver configuration.
 

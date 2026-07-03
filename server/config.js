@@ -4,7 +4,7 @@ const config = {
   apiKey: process.env.BESZEL_API_KEY ?? "",
   email: process.env.BESZEL_EMAIL ?? "",
   password: process.env.BESZEL_PASSWORD ?? "",
-  refreshInterval: parseInt(process.env.REFRESH_INTERVAL ?? "10000", 10),
+  refreshInterval: parseInt(process.env.REFRESH_INTERVAL ?? "60000", 10),
   requestTimeout: 10000,
 };
 
