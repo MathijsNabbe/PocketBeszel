@@ -7,7 +7,7 @@ A fullscreen touchscreen dashboard for monitoring servers via [Beszel](https://b
 Beszel Dashboard is a lightweight appliance-style web app that:
 
 - Proxies Beszel's PocketBase API so credentials never reach the browser
-- Caches device metrics and refreshes every 30 seconds
+- Caches device metrics and refreshes every 10 seconds
 - Shows CPU and RAM usage for all devices on a single screen
 - Modern card grid layout optimized for small landscape displays
 
@@ -33,7 +33,7 @@ environment:
   BESZEL_API_KEY: ""
   BESZEL_EMAIL: ""
   BESZEL_PASSWORD: ""
-  REFRESH_INTERVAL: "30000"
+  REFRESH_INTERVAL: "10000"
 ```
 
 | Variable | Required | Default | Description |
@@ -43,7 +43,7 @@ environment:
 | `BESZEL_API_KEY` | Yes* | — | PocketBase JWT bearer token |
 | `BESZEL_EMAIL` | No | — | Beszel user email (for automatic token refresh) |
 | `BESZEL_PASSWORD` | No | — | Beszel user password (for automatic token refresh) |
-| `REFRESH_INTERVAL` | No | `30000` | Cache refresh interval in milliseconds |
+| `REFRESH_INTERVAL` | No | `10000` | Cache refresh interval in milliseconds |
 
 \* Either `BESZEL_API_KEY` or both `BESZEL_EMAIL` and `BESZEL_PASSWORD` must be set.
 

@@ -10,7 +10,7 @@ services:
       BESZEL_API_KEY: ""
       BESZEL_EMAIL: ""
       BESZEL_PASSWORD: ""
-      REFRESH_INTERVAL: "30000"
+      REFRESH_INTERVAL: "10000"
     restart: unless-stopped
     # Uncomment if Beszel runs on the same Docker network:
     # networks:

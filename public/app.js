@@ -1,4 +1,4 @@
-const REFRESH_INTERVAL = 30000;
+const REFRESH_INTERVAL = 10000;
 
 const METRICS = [
   { key: "cpu", label: "CPU", className: "metric--cpu" },
