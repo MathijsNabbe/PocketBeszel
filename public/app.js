@@ -5,31 +5,11 @@ const BAR_METRICS = [
   { key: "ram", label: "RAM", className: "metric--ram" },
 ];
 
-const STAT_METRICS = [
-  {
-    key: "temperature",
-    label: "TEMP",
-    className: "metric--temp",
-    format: (v) => (v > 0 ? `${v}°C` : "—"),
-  },
-  {
-    key: "network",
-    label: "NET",
-    className: "metric--network",
-    format: (v) => (v > 0 ? `${v} MB/s` : "—"),
-  },
-  {
-    key: "containers",
-    label: "DOCKER",
-    className: "metric--containers",
-    format: (v) => String(v),
-  },
-];
-
 const state = {
   devices: [],
   viewMode: "loading",
   errorMessage: null,
+  secondsUntilRefresh: REFRESH_INTERVAL / 1000,
 };
 
 const app = document.getElementById("app");
@@ -44,6 +24,69 @@ function getTempLevel(value) {
   if (value >= 85) return "critical";
   if (value >= 70) return "warning";
   return "normal";
+}
+
+function formatBytesPerSecond(bytes) {
+  if (!bytes || bytes <= 0) {
+    return "0 B/s";
+  }
+
+  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+  let value = bytes;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
+function getStatMetrics(device) {
+  const metrics = [];
+
+  if (device.cpuTemp !== null && device.cpuTemp > 0) {
+    metrics.push({
+      key: "cpuTemp",
+      label: "CPU",
+      className: "metric--temp",
+      format: (v) => `${v}°C`,
+      level: (v) => getTempLevel(v),
+    });
+  }
+
+  if (device.gpuTemp !== null && device.gpuTemp > 0) {
+    metrics.push({
+      key: "gpuTemp",
+      label: "GPU",
+      className: "metric--gpu-temp",
+      format: (v) => `${v}°C`,
+      level: (v) => getTempLevel(v),
+    });
+  }
+
+  metrics.push({
+    key: "network",
+    label: "NET",
+    className: "metric--network",
+    format: (_v, dev) => `↓${formatBytesPerSecond(dev.netDown)} ↑${formatBytesPerSecond(dev.netUp)}`,
+    level: () => "normal",
+    isNetwork: true,
+  });
+
+  if (device.containers !== null && device.containers > 0) {
+    metrics.push({
+      key: "containers",
+      label: "DOCKER",
+      className: "metric--containers",
+      format: (v) => String(v),
+      level: () => "normal",
+    });
+  }
+
+  return metrics;
 }
 
 function createMetricRow(metric, device) {
@@ -98,12 +141,15 @@ function updateMetricRow(row, metric, device) {
 }
 
 function createStatPill(metric, device) {
-  const value = device[metric.key] ?? 0;
-  const level = metric.key === "temperature" ? getTempLevel(value) : "normal";
+  const value = device[metric.key];
+  const level = metric.level(metric.isNetwork ? 0 : value);
 
   const pill = document.createElement("div");
   pill.className = `stat-pill ${metric.className} stat-pill--${level}`;
   pill.dataset.metric = metric.key;
+  if (metric.isNetwork) {
+    pill.classList.add("stat-pill--wide");
+  }
 
   const label = document.createElement("span");
   label.className = "stat-pill__label";
@@ -111,20 +157,54 @@ function createStatPill(metric, device) {
 
   const valueEl = document.createElement("span");
   valueEl.className = "stat-pill__value";
-  valueEl.textContent = metric.format(value);
+  valueEl.textContent = metric.format(value, device);
 
   pill.append(label, valueEl);
   return pill;
 }
 
 function updateStatPill(pill, metric, device) {
-  const value = device[metric.key] ?? 0;
-  const level = metric.key === "temperature" ? getTempLevel(value) : "normal";
+  const value = device[metric.key];
+  const level = metric.level(metric.isNetwork ? 0 : value);
 
   pill.className = `stat-pill ${metric.className} stat-pill--${level}`;
+  pill.dataset.metric = metric.key;
+  if (metric.isNetwork) {
+    pill.classList.add("stat-pill--wide");
+  }
 
   const valueEl = pill.querySelector(".stat-pill__value");
-  if (valueEl) valueEl.textContent = metric.format(value);
+  if (valueEl) valueEl.textContent = metric.format(value, device);
+}
+
+function renderStatRow(statRow, device, isUpdate) {
+  const metrics = getStatMetrics(device);
+  statRow.dataset.columns = String(Math.min(metrics.length, 4));
+
+  if (!isUpdate) {
+    statRow.innerHTML = "";
+    for (const metric of metrics) {
+      statRow.appendChild(createStatPill(metric, device));
+    }
+    return;
+  }
+
+  const existing = [...statRow.querySelectorAll(".stat-pill")];
+  const existingKeys = new Set(existing.map((pill) => pill.dataset.metric));
+
+  for (const metric of metrics) {
+    const pill = statRow.querySelector(`[data-metric="${metric.key}"]`);
+    if (pill) {
+      updateStatPill(pill, metric, device);
+      existingKeys.delete(metric.key);
+    } else {
+      statRow.appendChild(createStatPill(metric, device));
+    }
+  }
+
+  for (const key of existingKeys) {
+    statRow.querySelector(`[data-metric="${key}"]`)?.remove();
+  }
 }
 
 function createDeviceCard(device) {
@@ -145,10 +225,7 @@ function createDeviceCard(device) {
 
   const statRow = document.createElement("div");
   statRow.className = "stat-row";
-
-  for (const metric of STAT_METRICS) {
-    statRow.appendChild(createStatPill(metric, device));
-  }
+  renderStatRow(statRow, device, false);
 
   metrics.appendChild(statRow);
   card.append(name, metrics);
@@ -164,10 +241,31 @@ function updateDeviceCard(card, device) {
     if (row) updateMetricRow(row, metric, device);
   }
 
-  for (const metric of STAT_METRICS) {
-    const pill = card.querySelector(`.stat-pill[data-metric="${metric.key}"]`);
-    if (pill) updateStatPill(pill, metric, device);
-  }
+  const statRow = card.querySelector(".stat-row");
+  if (statRow) renderStatRow(statRow, device, true);
+}
+
+function updateRefreshTimerDisplay() {
+  const timerEl = document.querySelector(".dashboard-header__timer");
+  if (!timerEl) return;
+
+  const minutes = Math.floor(state.secondsUntilRefresh / 60);
+  const seconds = state.secondsUntilRefresh % 60;
+  timerEl.textContent = `Refresh ${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function startRefreshCountdown() {
+  state.secondsUntilRefresh = REFRESH_INTERVAL / 1000;
+  updateRefreshTimerDisplay();
+
+  setInterval(() => {
+    state.secondsUntilRefresh -= 1;
+    updateRefreshTimerDisplay();
+
+    if (state.secondsUntilRefresh <= 0) {
+      window.location.reload();
+    }
+  }, 1000);
 }
 
 function renderStatePage(message) {
@@ -206,11 +304,19 @@ function renderDashboard(isUpdate = false) {
     title.className = "dashboard-header__title";
     title.textContent = "Beszel";
 
+    const meta = document.createElement("div");
+    meta.className = "dashboard-header__meta";
+
     const count = document.createElement("span");
     count.className = "dashboard-header__count";
     count.textContent = `${state.devices.length} server${state.devices.length === 1 ? "" : "s"}`;
 
-    header.append(title, count);
+    const timer = document.createElement("span");
+    timer.className = "dashboard-header__timer";
+    timer.textContent = "Refresh 1:00";
+
+    meta.append(count, timer);
+    header.append(title, meta);
 
     grid = document.createElement("div");
     grid.className = "device-grid";
@@ -225,6 +331,8 @@ function renderDashboard(isUpdate = false) {
   if (countEl) {
     countEl.textContent = `${state.devices.length} server${state.devices.length === 1 ? "" : "s"}`;
   }
+
+  updateRefreshTimerDisplay();
 
   const existingCards = [...grid.querySelectorAll(".device-card")];
   const existingById = new Map(existingCards.map((card) => [card.dataset.id, card]));
@@ -246,7 +354,7 @@ function renderDashboard(isUpdate = false) {
 
 async function fetchDevices() {
   try {
-    const response = await fetch("/api/devices");
+    const response = await fetch("/api/devices", { cache: "no-store" });
 
     if (!response.ok) {
       if (response.status === 503) {
@@ -284,11 +392,18 @@ async function fetchDevices() {
 
 fetchDevices();
 setInterval(fetchDevices, REFRESH_INTERVAL);
+startRefreshCountdown();
 
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) fetchDevices();
+  if (!document.hidden) {
+    state.secondsUntilRefresh = REFRESH_INTERVAL / 1000;
+    fetchDevices();
+  }
 });
 
 window.addEventListener("pageshow", (event) => {
-  if (event.persisted) fetchDevices();
+  if (event.persisted) {
+    state.secondsUntilRefresh = REFRESH_INTERVAL / 1000;
+    fetchDevices();
+  }
 });

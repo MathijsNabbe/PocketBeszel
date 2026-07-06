@@ -9,7 +9,7 @@ Beszel Dashboard is a lightweight appliance-style web app that:
 - Proxies Beszel's PocketBase API so credentials never reach the browser
 - Caches device metrics and refreshes every 60 seconds
 - Reloads the page every 60 seconds for reliable kiosk updates
-- Shows CPU, RAM, temperature, network throughput, and running Docker container count per device
+- Shows CPU, RAM, CPU/GPU temperature, network upload/download, and running Docker containers per device
 - Modern card grid layout optimized for small landscape displays
 
 ## Installation
@@ -107,7 +107,7 @@ docker compose up -d --force-recreate
 
 The backend exposes two endpoints:
 
-- `GET /api/devices` — Returns an array of `{ id, name, cpu, ram, temperature, network, containers }` objects
+- `GET /api/devices` — Returns `{ id, name, cpu, ram, cpuTemp, gpuTemp, netUp, netDown, containers }` per device
 - `GET /api/health` — Returns `{ status, beszel, deviceCount, lastUpdated }`
 
 ## Kiosk mode (Raspberry Pi / Orange Pi)
@@ -118,7 +118,7 @@ Launch Chromium in kiosk mode on your display:
 chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:3000
 ```
 
-The page automatically reloads every 60 seconds via a meta refresh tag, which keeps kiosk displays up to date even when JavaScript timers are throttled.
+The page automatically reloads every 60 seconds via a meta refresh tag and a visible countdown timer in the header. If the timer reaches zero, the page also forces a JavaScript reload as a backup for kiosk mode.
 
 For a 480×320 display, set the framebuffer resolution in `/boot/config.txt` or your display driver configuration.
 

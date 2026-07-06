@@ -8,6 +8,26 @@ const cache = {
 
 let activeToken = config.apiKey;
 
+const CPU_SENSOR_PATTERNS = [
+  /coretemp/i,
+  /k10temp/i,
+  /tctl/i,
+  /zenpower/i,
+  /cpu_thermal/i,
+  /cpu0/i,
+  /acpitz/i,
+];
+
+const GPU_SENSOR_PATTERNS = [
+  /amdgpu/i,
+  /nvidia/i,
+  /radeon/i,
+  /junction/i,
+  /hotspot/i,
+  /edge/i,
+  /^gpu/i,
+];
+
 export function getCache() {
   return { ...cache, devices: [...cache.devices] };
 }
@@ -27,7 +47,7 @@ function roundMetric(value) {
 
 function roundDecimal(value) {
   if (typeof value !== "number" || Number.isNaN(value)) {
-    return 0;
+    return null;
   }
   return Math.round(value * 10) / 10;
 }
@@ -55,16 +75,96 @@ function countContainersBySystem(items) {
   return counts;
 }
 
-export function normalizeDevice(record, containerCounts) {
+function matchesSensorPattern(name, patterns) {
+  return patterns.some((pattern) => pattern.test(name));
+}
+
+function extractCpuTemp(temperatures) {
+  if (!temperatures || typeof temperatures !== "object") {
+    return null;
+  }
+
+  let maxTemp = null;
+  for (const [name, value] of Object.entries(temperatures)) {
+    if (typeof value !== "number" || value <= 0) {
+      continue;
+    }
+    if (matchesSensorPattern(name, CPU_SENSOR_PATTERNS) && !matchesSensorPattern(name, GPU_SENSOR_PATTERNS)) {
+      maxTemp = maxTemp === null ? value : Math.max(maxTemp, value);
+    }
+  }
+
+  return roundDecimal(maxTemp);
+}
+
+function extractGpuTemp(temperatures, gpuData) {
+  if (!temperatures || typeof temperatures !== "object") {
+    return null;
+  }
+
+  if (gpuData && typeof gpuData === "object") {
+    for (const gpu of Object.values(gpuData)) {
+      const gpuName = gpu?.n;
+      if (gpuName && typeof temperatures[gpuName] === "number" && temperatures[gpuName] > 0) {
+        return roundDecimal(temperatures[gpuName]);
+      }
+    }
+  }
+
+  let maxTemp = null;
+  for (const [name, value] of Object.entries(temperatures)) {
+    if (typeof value !== "number" || value <= 0) {
+      continue;
+    }
+    if (matchesSensorPattern(name, GPU_SENSOR_PATTERNS) && !matchesSensorPattern(name, CPU_SENSOR_PATTERNS)) {
+      maxTemp = maxTemp === null ? value : Math.max(maxTemp, value);
+    }
+  }
+
+  return roundDecimal(maxTemp);
+}
+
+function parseNetwork(stats) {
+  const bandwidth = stats?.b;
+  if (Array.isArray(bandwidth) && bandwidth.length >= 2) {
+    return {
+      upload: bandwidth[0] ?? 0,
+      download: bandwidth[1] ?? 0,
+    };
+  }
+
+  return { upload: 0, download: 0 };
+}
+
+function buildLatestStatsMap(items) {
+  const latestBySystem = {};
+
+  for (const record of items) {
+    const systemId = record.system;
+    if (!systemId || latestBySystem[systemId]) {
+      continue;
+    }
+    latestBySystem[systemId] = record.stats ?? {};
+  }
+
+  return latestBySystem;
+}
+
+export function normalizeDevice(record, containerCounts, stats) {
   const info = record.info ?? {};
+  const temperatures = stats?.t ?? null;
+  const containerCount = containerCounts[record.id];
+
   return {
     id: record.id,
     name: record.name ?? "Unknown",
     cpu: roundMetric(info.cpu),
     ram: roundMetric(info.mp),
-    temperature: roundDecimal(info.dt),
-    network: roundDecimal(info.b),
-    containers: containerCounts[record.id] ?? 0,
+    cpuTemp: extractCpuTemp(temperatures),
+    gpuTemp: extractGpuTemp(temperatures, stats?.g),
+    netUp: parseNetwork(stats).upload,
+    netDown: parseNetwork(stats).download,
+    containers: containerCount > 0 ? containerCount : null,
   };
 }
 
@@ -155,7 +255,7 @@ async function fetchWithAuth(path, params = {}) {
 
 export async function fetchDevices() {
   try {
-    const [systemsData, containersData] = await Promise.all([
+    const [systemsData, containersData, statsData] = await Promise.all([
       fetchWithAuth("/api/collections/systems/records", {
         page: "1",
         perPage: "500",
@@ -164,6 +264,13 @@ export async function fetchDevices() {
         page: "1",
         perPage: "2000",
         fields: "id,system,status",
+      }),
+      fetchWithAuth("/api/collections/system_stats/records", {
+        page: "1",
+        perPage: "500",
+        sort: "-created",
+        filter: "type='1m'",
+        fields: "system,stats,created",
       }),
     ]);
 
@@ -179,7 +286,10 @@ export async function fetchDevices() {
 
     const items = systemsData.items ?? [];
     const containerCounts = countContainersBySystem(containersData?.items ?? []);
-    const devices = items.map((record) => normalizeDevice(record, containerCounts));
+    const latestStats = buildLatestStatsMap(statsData?.items ?? []);
+    const devices = items.map((record) =>
+      normalizeDevice(record, containerCounts, latestStats[record.id])
+    );
 
     setCache(devices, "ok");
     return { ok: true, devices, beszelStatus: "ok" };
